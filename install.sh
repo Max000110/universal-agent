@@ -12,23 +12,28 @@ RESET="\033[0m"
 
 echo -e "${BOLD}${CYAN}=== Installing Universal Agent CLI (uag) ===${RESET}"
 
-# 1. Detect Environment
+# 1. Detect Environment & Configure Termux Build Toolchain Variables
 IS_TERMUX=0
 if [ -n "$PREFIX" ] && [[ "$PREFIX" == *"com.termux"* ]]; then
     IS_TERMUX=1
     echo -e "• Detected Environment: ${YELLOW}Termux (Android POSIX)${RESET}"
+    
+    # Fix Issue 3 & 5: Export NDK Android API level and disable heavy mobile Rust Fat LTO
+    export DEBIAN_FRONTEND=noninteractive
+    export ANDROID_API_LEVEL="${ANDROID_API_LEVEL:-24}"
+    export CARGO_PROFILE_RELEASE_LTO="false"
+    export RUSTFLAGS="${RUSTFLAGS} -C lto=off"
 elif [ -f "/etc/os-release" ]; then
     echo -e "• Detected Environment: ${YELLOW}Linux / Ubuntu${RESET}"
 else
     echo -e "• Detected Environment: ${YELLOW}Generic POSIX${RESET}"
 fi
 
-# 2. Check/Install System Dependencies
+# 2. Check/Install System Dependencies & Pre-compiled Termux Binary Packages
 if [ "$IS_TERMUX" -eq 1 ]; then
-    if ! command -v python3 &> /dev/null || ! command -v git &> /dev/null; then
-        echo -e "• Installing Termux dependencies (python, git)..."
-        pkg update -y && pkg install -y python git
-    fi
+    echo -e "• Ensuring non-interactive Termux dependencies (python, git, cryptography, pydantic)..."
+    # Fix Issue 1 & 2: Install native pre-compiled Termux C/Rust binary packages
+    pkg install -y python git python-cryptography python-pydantic maturin 2>/dev/null || true
 else
     if ! command -v python3 &> /dev/null; then
         echo -e "${RED}Error: Python 3 is required but not installed.${RESET}"
@@ -44,9 +49,14 @@ BIN_DIR="${HOME}/.local/bin"
 mkdir -p "${APP_DIR}"
 mkdir -p "${BIN_DIR}"
 
+# Fix Issue 2 & 4: Use --system-site-packages on Termux to inherit pre-compiled binary packages
 if [ ! -d "${VENV_DIR}" ]; then
     echo -e "• Creating Python virtual environment in ${VENV_DIR}..."
-    python3 -m venv "${VENV_DIR}"
+    if [ "$IS_TERMUX" -eq 1 ]; then
+        python3 -m venv --system-site-packages "${VENV_DIR}"
+    else
+        python3 -m venv "${VENV_DIR}"
+    fi
 fi
 
 # 4. Install / Update Package
@@ -56,14 +66,22 @@ echo -e "• Upgrading pip, setuptools, and wheel..."
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 if [ -f "${SCRIPT_DIR}/pyproject.toml" ]; then
     echo -e "• Installing package from local source directory..."
-    "${VENV_DIR}/bin/pip" install -e "${SCRIPT_DIR}"
+    if [ "$IS_TERMUX" -eq 1 ]; then
+        "${VENV_DIR}/bin/pip" install --no-build-isolation -e "${SCRIPT_DIR}" || "${VENV_DIR}/bin/pip" install -e "${SCRIPT_DIR}"
+    else
+        "${VENV_DIR}/bin/pip" install -e "${SCRIPT_DIR}"
+    fi
 else
     TEMP_CLONE="${APP_DIR}/source_tmp"
     rm -rf "${TEMP_CLONE}"
     echo -e "• Cloning latest release from GitHub (Max000110/universal-agent)..."
     git clone --depth=1 https://github.com/Max000110/universal-agent.git "${TEMP_CLONE}"
     echo -e "• Installing Universal Agent python dependencies..."
-    "${VENV_DIR}/bin/pip" install "${TEMP_CLONE}"
+    if [ "$IS_TERMUX" -eq 1 ]; then
+        "${VENV_DIR}/bin/pip" install --no-build-isolation "${TEMP_CLONE}" || "${VENV_DIR}/bin/pip" install "${TEMP_CLONE}"
+    else
+        "${VENV_DIR}/bin/pip" install "${TEMP_CLONE}"
+    fi
     rm -rf "${TEMP_CLONE}"
 fi
 
