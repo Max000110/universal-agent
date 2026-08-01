@@ -50,18 +50,20 @@ if [ ! -d "${VENV_DIR}" ]; then
 fi
 
 # 4. Install / Update Package
-echo -e "• Upgrading pip and installing Universal Agent package..."
-"${VENV_DIR}/bin/pip" install --upgrade pip --quiet
+echo -e "• Upgrading pip, setuptools, and wheel..."
+"${VENV_DIR}/bin/pip" install --upgrade pip setuptools wheel --no-warn-script-location
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 if [ -f "${SCRIPT_DIR}/pyproject.toml" ]; then
-    "${VENV_DIR}/bin/pip" install -e "${SCRIPT_DIR}" --quiet
+    echo -e "• Installing package from local source directory..."
+    "${VENV_DIR}/bin/pip" install -e "${SCRIPT_DIR}"
 else
     TEMP_CLONE="${APP_DIR}/source_tmp"
     rm -rf "${TEMP_CLONE}"
-    echo -e "• Fetching latest release from GitHub (Max000110/universal-agent)..."
-    git clone --depth=1 https://github.com/Max000110/universal-agent.git "${TEMP_CLONE}" --quiet
-    "${VENV_DIR}/bin/pip" install "${TEMP_CLONE}" --quiet
+    echo -e "• Cloning latest release from GitHub (Max000110/universal-agent)..."
+    git clone --depth=1 https://github.com/Max000110/universal-agent.git "${TEMP_CLONE}"
+    echo -e "• Installing Universal Agent python dependencies..."
+    "${VENV_DIR}/bin/pip" install "${TEMP_CLONE}"
     rm -rf "${TEMP_CLONE}"
 fi
 
