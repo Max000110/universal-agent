@@ -17,6 +17,7 @@ IS_TERMUX=0
 if [ -n "$PREFIX" ] && [[ "$PREFIX" == *"com.termux"* ]]; then
     IS_TERMUX=1
     echo -e "• Detected Environment: ${YELLOW}Termux (Android POSIX)${RESET}"
+    echo -e "• ${YELLOW}Notice: Mobile ARM setup may take 1-2 minutes. Please remain patient...${RESET}"
     
     # Fix Issue 3 & 5: Export NDK Android API level and disable heavy mobile Rust Fat LTO
     export DEBIAN_FRONTEND=noninteractive

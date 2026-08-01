@@ -25,6 +25,9 @@ Install **Universal Agent** globally on **Ubuntu** or **Termux (Android)** with 
 curl -fsSL https://raw.githubusercontent.com/Max000110/universal-agent/main/install.sh | bash
 ```
 
+> [!IMPORTANT]
+> **📱 Termux (Android) Users**: During installation on Termux, linking Python dependencies on mobile ARM processors can take **1 to 2 minutes**. **Please wait patiently and do not close your terminal** until you see the `✓ Installation Successful!` banner.
+
 > **Note**: The installer automatically detects your environment, creates the local virtual environment in `~/.antigravitycli/venv`, installs required dependencies, and symlinks `universal-agent` and shortcut alias `uag` directly into your `$PATH`.
 
 ### Alternative Manual Installation
