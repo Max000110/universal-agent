@@ -1,6 +1,6 @@
 """
-Antigravity CLI package.
+Universal Agent CLI package.
 """
 
 __version__ = "1.0.0"
-__app_name__ = "antigravity"
+__app_name__ = "universal-agent"

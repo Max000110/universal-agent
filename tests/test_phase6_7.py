@@ -16,7 +16,7 @@ def test_platform_environment():
 def test_cli_version_command():
     res = runner.invoke(app, ["version"])
     assert res.exit_code == 0
-    assert "antigravity version" in res.stdout
+    assert "universal-agent version" in res.stdout
 
 
 def test_cli_status_command(tmp_path, monkeypatch):

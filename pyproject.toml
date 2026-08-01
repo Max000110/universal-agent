@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "antigravity-cli"
+name = "universal-agent"
 version = "1.0.0"
-description = "Terminal-first agentic framework CLI with session cookie login for ChatGPT and Gemini"
+description = "Flagship local-first agentic CLI framework for Ubuntu and Termux with session cookie login for ChatGPT and Gemini"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
@@ -17,7 +17,12 @@ dependencies = [
 ]
 
 [project.scripts]
+universal-agent = "antigravity_cli.cli:app"
+uag = "antigravity_cli.cli:app"
 antigravity = "antigravity_cli.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.pytest.ini_options]
 minversion = "7.0"

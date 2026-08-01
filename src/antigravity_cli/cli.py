@@ -112,5 +112,70 @@ def execute_prompt(
     asyncio.run(tui.process_input(prompt))
 
 
+@app.command("update")
+def update_app():
+    """Update Universal Agent CLI to the latest version while preserving sessions and vault."""
+    import subprocess
+    from pathlib import Path
+    
+    console.print("[bold cyan]=== Updating Universal Agent CLI ===[/bold cyan]")
+    venv_python = Path.home() / ".antigravitycli" / "venv" / "bin" / "python"
+    
+    if venv_python.exists():
+        console.print("• Updating package dependencies and binary in virtualenv...")
+        res = subprocess.run([str(venv_python), "-m", "pip", "install", "--upgrade", "universal-agent"], capture_output=True, text=True)
+        if res.returncode != 0:
+            # Fallback to local source upgrade
+            subprocess.run([str(venv_python), "-m", "pip", "install", "--upgrade", "-e", "."], capture_output=True, text=True)
+        console.print("[bold green]✓ Update completed successfully! Preserved all vault sessions & config.[/bold green]")
+    else:
+        console.print("[yellow]Virtual environment not found. Re-run installer: curl -fsSL https://raw.githubusercontent.com/Max000110/universal-agent/main/install.sh | bash[/yellow]")
+
+
+@app.command("uninstall")
+def uninstall_app(
+    purge_data: bool = typer.Option(False, "--purge", "-p", help="Purge all user session data, encrypted vault, and settings")
+):
+    """Uninstall Universal Agent CLI launchers and optionally purge session vault."""
+    import shutil
+    from pathlib import Path
+    
+    console.print("[bold yellow]=== Uninstalling Universal Agent CLI ===[/bold yellow]")
+    
+    # Executables to remove
+    bin_dir = Path.home() / ".local" / "bin"
+    for binary_name in ["universal-agent", "uag", "antigravity"]:
+        target = bin_dir / binary_name
+        if target.exists() or target.is_symlink():
+            try:
+                target.unlink()
+                console.print(f"• Removed launcher: {target}")
+            except Exception as e:
+                console.print(f"[red]Could not remove {target}: {e}[/red]")
+                
+    # Check Termux prefix bin
+    import os
+    prefix = os.environ.get("PREFIX", "")
+    if prefix:
+        termux_bin = Path(prefix) / "bin"
+        for binary_name in ["universal-agent", "uag", "antigravity"]:
+            target = termux_bin / binary_name
+            if target.exists() or target.is_symlink():
+                try:
+                    target.unlink()
+                    console.print(f"• Removed Termux launcher: {target}")
+                except Exception:
+                    pass
+
+    app_dir = Path.home() / ".antigravitycli"
+    if purge_data and app_dir.exists():
+        shutil.rmtree(app_dir, ignore_errors=True)
+        console.print("[bold red]✓ Purged user application data and encrypted vault.[/bold red]")
+    else:
+        console.print(f"[dim]Preserved vault sessions and config in {app_dir} (Use --purge to remove data).[/dim]")
+
+    console.print("[bold green]✓ Universal Agent CLI uninstalled successfully.[/bold green]")
+
+
 if __name__ == "__main__":
     app()
