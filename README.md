@@ -19,8 +19,8 @@
 ## 📥 Quick Installation
 
 ```bash
-git clone https://github.com/user/antigravity-cli.git
-cd antigravity-cli
+git clone https://github.com/Max000110/universal-agent.git
+cd universal-agent
 bash install.sh
 ```
 

@@ -9,7 +9,7 @@ Welcome to **Universal Agent**! This guide walks you through the 1-minute instal
 Run this single command in your terminal:
 
 ```bash
-git clone https://github.com/user/universal-agent.git && cd universal-agent && bash install.sh
+git clone https://github.com/Max000110/universal-agent.git && cd universal-agent && bash install.sh
 ```
 
 ---
@@ -20,7 +20,7 @@ git clone https://github.com/user/universal-agent.git && cd universal-agent && b
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ STEP 1: OPEN TERMINAL & PASTE INSTALLER                                     │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ $ git clone https://github.com/user/universal-agent.git && cd universal-agent│
+│ $ git clone https://github.com/Max000110/universal-agent.git && cd universal-agent│
 │ $ bash install.sh                                                           │
 │                                                                             │
 │ • Creating Python virtual environment in ~/.antigravitycli/venv...           │
