@@ -1,6 +1,6 @@
 import sys
 import asyncio
-from typing import Optional
+from typing import Optional, List
 
 from rich.console import Console
 from rich.panel import Panel
@@ -22,7 +22,7 @@ from antigravity_cli.platform import PlatformEnvironment
 class AntigravityTUI:
     """
     Terminal User Interface using Rich for Antigravity CLI.
-    Runs on both Ubuntu workstation TUI and Termux constrained terminals.
+    Runs cleanly on both Ubuntu workstations and Termux constrained terminals.
     """
 
     def __init__(self, config_manager: ConfigManager, vault_manager: VaultManager):
@@ -36,7 +36,7 @@ class AntigravityTUI:
         )
         self.skills_manager = SkillManager(user_skills_dir=self.config.config.get_skills_dir())
         self.console = Console()
-        self.history = []
+        self.history: List[ChatMessage] = []
 
     def render_header(self) -> None:
         platform_info = PlatformEnvironment.get_platform_name()
@@ -76,7 +76,8 @@ class AntigravityTUI:
         self.console.print("[dim]Paste Cookie Header string (e.g. 'key=val; key2=val2') OR JSON cookie export blob:[/dim]")
         
         try:
-            raw_input = input("Cookie Data > ").strip()
+            raw_input = await asyncio.to_thread(lambda: input("Cookie Data > "))
+            raw_input = raw_input.strip()
         except (EOFError, KeyboardInterrupt):
             self.console.print("[red]Import cancelled.[/red]")
             return
@@ -101,8 +102,9 @@ class AntigravityTUI:
         self.console.print(f"[bold green]✓ Session successfully imported and encrypted for {provider.upper()}![/bold green]")
         self.console.print(f"[dim]Format: {val_res.format_type} | Cookies parsed: {val_res.normalized_session['cookie_count']}[/dim]")
         
-        # Switch active provider to newly imported session
+        # Switch active provider to newly imported session & refresh registry adapters
         self.config.update(active_provider=provider)
+        self.registry._reload_adapters()
 
     async def process_input(self, user_input: str) -> bool:
         user_input = user_input.strip()
@@ -115,7 +117,6 @@ class AntigravityTUI:
 
         # Slash commands
         if user_input.startswith("/"):
-            # Check for skills list/detail override
             if user_input == "/skills" or user_input.startswith("/skills "):
                 skills = self.skills_manager.list_skills()
                 self.console.print("\n[bold cyan]=== Installed Antigravity Skills ===[/bold cyan]")
@@ -128,7 +129,13 @@ class AntigravityTUI:
                 self.console.print(Panel(res_text, border_style="green", title=f"Skill: {skill_name}"))
                 return True
 
+            prev_prov = self.config.config.active_provider
             res: CommandResult = await self.router.execute(user_input)
+            
+            # Reset conversation history if provider changed
+            if self.config.config.active_provider != prev_prov:
+                self.history.clear()
+
             if res.data and res.data.get("action") == "import_prompt":
                 await self.handle_session_import_interactive(res.data.get("provider", "chatgpt"))
             else:
@@ -153,14 +160,20 @@ class AntigravityTUI:
         self.console.print(f"[bold cyan]Assistant ({cfg.active_provider.upper()} / {cfg.active_model}):[/bold cyan] ", end="")
 
         response_text = ""
-        async for chunk in adapter.stream_chat(
-            messages=self.history,
-            model=cfg.active_model,
-            deep_think=cfg.deep_think
-        ):
-            sys.stdout.write(chunk)
+        try:
+            async for chunk in adapter.stream_chat(
+                messages=self.history,
+                model=cfg.active_model,
+                deep_think=cfg.deep_think
+            ):
+                sys.stdout.write(chunk)
+                sys.stdout.flush()
+                response_text += chunk
+        except Exception as e:
+            error_msg = f"\n[Streaming error: {e}]"
+            sys.stdout.write(error_msg)
             sys.stdout.flush()
-            response_text += chunk
+            response_text += error_msg
 
         sys.stdout.write("\n\n")
         self.history.append(ChatMessage(role="assistant", content=response_text))
@@ -172,7 +185,7 @@ class AntigravityTUI:
 
         while True:
             try:
-                user_input = input("\nantigravity > ")
+                user_input = await asyncio.to_thread(lambda: input("\nantigravity > "))
                 should_continue = await self.process_input(user_input)
                 if not should_continue:
                     break
