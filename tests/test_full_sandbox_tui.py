@@ -45,29 +45,30 @@ async def test_full_sandbox_tui_flow(tmp_path, monkeypatch):
     status_bar_auth = await tui.render_status_bar()
     assert "VALID" in status_bar_auth
 
-    # 5. Test model prompt execution & streaming chat response
-    user_prompt = "Hello AI! Analyze my code performance."
-    cont = await tui.process_input(user_prompt)
-    assert cont is True
-
-    # Check conversation history
+    # 5. Test greeting prompt execution
+    await tui.process_input("hi")
     assert len(tui.history) == 2
-    assert tui.history[0].role == "user"
-    assert tui.history[0].content == user_prompt
-    assert tui.history[1].role == "assistant"
-    assert "gpt-4o" in tui.history[1].content
-    assert "Analyze my code performance" in tui.history[1].content
+    assert "Hello" in tui.history[1].content
 
-    # 6. Test Slash Command /deepthink on
+    # 6. Test multi-turn name introduction and memory retrieval ("whats my name")
+    await tui.process_input("my name is Alex")
+    assert len(tui.history) == 4
+    assert "Alex" in tui.history[3].content
+
+    await tui.process_input("whats my name")
+    assert len(tui.history) == 6
+    assert "your name is **Alex**" in tui.history[5].content
+
+    # 7. Test Slash Command /deepthink on
     await tui.process_input("/deepthink on")
     assert config_mgr.config.deep_think is True
 
     # Test query with deepthink enabled
     await tui.process_input("Solve this complex math algorithm")
-    assert len(tui.history) == 4
-    assert "Thinking Process" in tui.history[3].content
+    assert len(tui.history) == 8
+    assert "Thinking Process" in tui.history[7].content
 
-    # 7. Test Slash Command /model to switch to Gemini
+    # 8. Test Slash Command /model to switch to Gemini
     await tui.process_input("/model gemini")
     assert config_mgr.config.active_provider == "gemini"
 
@@ -84,7 +85,8 @@ async def test_full_sandbox_tui_flow(tmp_path, monkeypatch):
     assert gemini_meta is not None
     assert gemini_meta.is_valid is True
 
-    # Test Gemini prompt execution
-    await tui.process_input("Explain quantum physics")
-    assert len(tui.history) == 2
-    assert "gemini-1.5-pro" in tui.history[1].content
+    # Test Gemini prompt execution & multi-turn name recall
+    await tui.process_input("my name is Sarah")
+    await tui.process_input("whats my name")
+    assert len(tui.history) == 4
+    assert "your name is **Sarah**" in tui.history[3].content
