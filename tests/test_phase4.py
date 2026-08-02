@@ -6,7 +6,8 @@ from antigravity_cli.router import CommandRouter
 
 
 @pytest.fixture
-def setup_router(tmp_path):
+def setup_router(tmp_path, monkeypatch):
+    monkeypatch.setenv('UAG_TEST_MODE', '1')
     cm = ConfigManager(config_dir=str(tmp_path))
     vm = VaultManager(vault_path=tmp_path / "v.enc", key_path=tmp_path / "v.key")
     reg = ModelRegistry(vault_manager=vm)

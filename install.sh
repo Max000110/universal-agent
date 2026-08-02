@@ -97,10 +97,10 @@ done
 
 # 6. Ensure ~/.local/bin is in Shell PATH
 SHELL_CONFIG=""
-if [ -n "$BASH_VERSION" ] || [ -f "${HOME}/.bashrc" ]; then
-    SHELL_CONFIG="${HOME}/.bashrc"
-elif [ -f "${HOME}/.zshrc" ]; then
+if [ -n "$ZSH_VERSION" ] || [ "$(basename "$SHELL")" = "zsh" ]; then
     SHELL_CONFIG="${HOME}/.zshrc"
+elif [ -n "$BASH_VERSION" ] || [ -f "${HOME}/.bashrc" ]; then
+    SHELL_CONFIG="${HOME}/.bashrc"
 elif [ -f "${HOME}/.profile" ]; then
     SHELL_CONFIG="${HOME}/.profile"
 fi
@@ -108,7 +108,9 @@ fi
 if [[ ":$PATH:" != *":${BIN_DIR}:"* ]]; then
     echo -e "• Adding ${BIN_DIR} to PATH in ${SHELL_CONFIG}..."
     if [ -n "${SHELL_CONFIG}" ]; then
-        echo "export PATH=\"${BIN_DIR}:\$PATH\"" >> "${SHELL_CONFIG}"
+        if ! grep -qF "${BIN_DIR}" "${SHELL_CONFIG}" 2>/dev/null; then
+            echo "export PATH=\"${BIN_DIR}:\$PATH\"" >> "${SHELL_CONFIG}"
+        fi
     fi
     export PATH="${BIN_DIR}:$PATH"
 fi

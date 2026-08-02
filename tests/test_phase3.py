@@ -7,7 +7,8 @@ from antigravity_cli.providers.base import ChatMessage
 
 
 @pytest.mark.asyncio
-async def test_chatgpt_adapter_models():
+async def test_chatgpt_adapter_models(monkeypatch):
+    monkeypatch.setenv('UAG_TEST_MODE', '1')
     adapter = ChatGPTAdapter()
     models = await adapter.list_models()
     assert len(models) >= 3
@@ -15,7 +16,8 @@ async def test_chatgpt_adapter_models():
 
 
 @pytest.mark.asyncio
-async def test_gemini_adapter_models():
+async def test_gemini_adapter_models(monkeypatch):
+    monkeypatch.setenv('UAG_TEST_MODE', '1')
     adapter = GeminiAdapter()
     models = await adapter.list_models()
     assert len(models) >= 3
@@ -23,7 +25,8 @@ async def test_gemini_adapter_models():
 
 
 @pytest.mark.asyncio
-async def test_model_registry(tmp_path):
+async def test_model_registry(tmp_path, monkeypatch):
+    monkeypatch.setenv('UAG_TEST_MODE', '1')
     vm = VaultManager(vault_path=tmp_path / "v.enc", key_path=tmp_path / "v.key")
     reg = ModelRegistry(vault_manager=vm)
     
@@ -39,7 +42,8 @@ async def test_model_registry(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_streaming_chat_with_deepthink():
+async def test_streaming_chat_with_deepthink(monkeypatch):
+    monkeypatch.setenv('UAG_TEST_MODE', '1')
     adapter = ChatGPTAdapter(session_data={"cookies": {"session_token": "valid"}})
     messages = [ChatMessage(role="user", content="Hello test prompt")]
 

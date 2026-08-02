@@ -1,6 +1,7 @@
 import asyncio
 import json
 import uuid
+import os
 from datetime import datetime, timezone
 from typing import List, Dict, Any, AsyncGenerator, Optional
 import httpx
@@ -94,7 +95,7 @@ class GeminiAdapter(BaseProviderAdapter):
         if deep_think:
             yield "‹Thinking Process: Analyzing 2M token context & Gemini reasoning policy...›\n\n"
 
-        is_synthetic_test = any(len(str(v)) < 50 or "test" in str(v).lower() or "valid" in str(v).lower() for v in self.cookies.values())
+        is_synthetic_test = os.environ.get('UAG_TEST_MODE')
         if is_synthetic_test:
             stored_name = None
             for m in messages:
@@ -144,11 +145,9 @@ class GeminiAdapter(BaseProviderAdapter):
                 elif resp.status_code != 200:
                     raise RuntimeError(f"Gemini Web Endpoint Error (HTTP {resp.status_code}). Response failed.")
                 
-                chunks = [f"[{model}] ", "Processing prompt: '", user_prompt[:60], "...'\n\n", "Executing live Gemini Web reasoning model..."]
-                for chunk in chunks:
-                    received_any_chunk = True
-                    await asyncio.sleep(0.02)
-                    yield chunk
+                received_any_chunk = True
+                yield f"[{model}] Gemini Web API integration requires an active Bard/Gemini session endpoint.\n"
+                yield "Please ensure your Gemini session cookies are valid and try again.\n"
         except httpx.RequestError as req_err:
             raise RuntimeError(f"Network error connecting to Gemini Web endpoint: {req_err}")
 

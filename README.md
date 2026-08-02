@@ -4,7 +4,7 @@
 
 **Flagship Local-First Agentic Framework CLI for Ubuntu & Termux**
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/Max000110/universal-agent)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/Max000110/universal-agent)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org)
 [![Platform](https://img.shields.io/badge/platform-Ubuntu%20%7C%20Termux-orange.svg)](#-platform-support)
@@ -26,7 +26,7 @@ curl -fsSL https://raw.githubusercontent.com/Max000110/universal-agent/main/inst
 ```
 
 > [!IMPORTANT]
-> **📱 Termux (Android) Users**: During installation on Termux, linking Python dependencies on mobile ARM processors can take **1 to 2 minutes**. **Please wait patiently and do not close your terminal** until you see the `✓ Installation Successful!` banner.
+> **📱 Termux (Android) Users**: ⏳ Installation on Termux may take 1-2 minutes. Please wait patiently during the ARM compilation phase.
 
 > **Note**: The installer automatically detects your environment, creates the local virtual environment in `~/.antigravitycli/venv`, installs required dependencies, and symlinks `universal-agent` and shortcut alias `uag` directly into your `$PATH`.
 
@@ -36,6 +36,14 @@ git clone https://github.com/Max000110/universal-agent.git
 cd universal-agent
 bash install.sh
 ```
+
+---
+
+## ⚡ Quick Start
+
+1. Import your session cookies: `uag import-session chatgpt`
+2. Launch the CLI: `uag`
+3. Check status: `uag status`
 
 ---
 
@@ -101,7 +109,7 @@ graph TD
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Universal Agent CLI v1.0.0 — Termux / Ubuntu Linux                          │
+│ Universal Agent CLI v1.1.0 — Termux / Ubuntu Linux                          │
 │ Type prompts directly or use slash commands (/help, /models, /deepthink)     │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ > /models                                                                   │
@@ -248,3 +256,12 @@ tests/test_phase6_7.py ....                                              [100%]
 
 ## 📄 License
 Licensed under the [MIT License](LICENSE).
+
+---
+
+## 🛠️ Troubleshooting
+
+- **Termux slow install**: Expected behavior, wait 1-2 min during the ARM compilation phase.
+- **`command not found` after install**: Run `source ~/.bashrc` or restart your terminal.
+- **Session expired errors**: Re-import cookies with `/session import chatgpt` (or `uag import-session chatgpt`).
+

@@ -9,6 +9,7 @@ from antigravity_cli.providers.base import ChatMessage
 
 @pytest.mark.asyncio
 async def test_full_sandbox_tui_flow(tmp_path, monkeypatch):
+    monkeypatch.setenv('UAG_TEST_MODE', '1')
     # Setup temporary sandbox paths
     app_dir = tmp_path / ".antigravitycli"
     vault_path = app_dir / "vault.enc"

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import uuid
+import os
 from datetime import datetime, timezone
 from typing import List, Dict, Any, AsyncGenerator, Optional
 import httpx
@@ -95,7 +96,7 @@ class ChatGPTAdapter(BaseProviderAdapter):
             yield "‹Thinking Process: Performing multi-step reasoning & structural code verification...›\n\n"
 
         # Check for synthetic/test cookies
-        is_synthetic_test = any(len(str(v)) < 50 or "test" in str(v).lower() or "valid" in str(v).lower() for v in self.cookies.values())
+        is_synthetic_test = os.environ.get('UAG_TEST_MODE')
         if is_synthetic_test:
             # Multi-turn history analysis
             stored_name = None

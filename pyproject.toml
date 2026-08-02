@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "universal-agent"
-version = "1.0.0"
+version = "1.1.0"
 description = "Flagship local-first agentic CLI framework for Ubuntu and Termux with session cookie login for ChatGPT and Gemini"
 readme = "README.md"
 requires-python = ">=3.9"

@@ -21,6 +21,7 @@ def test_cli_version_command():
 
 def test_cli_status_command(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("UAG_TEST_MODE", "1")
     res = runner.invoke(app, ["status"])
     assert res.exit_code == 0
     assert "Antigravity Status" in res.stdout
@@ -29,6 +30,7 @@ def test_cli_status_command(tmp_path, monkeypatch):
 
 def test_cli_exec_command(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("UAG_TEST_MODE", "1")
     res = runner.invoke(app, ["exec", "/status"])
     assert res.exit_code == 0
     assert "System Status" in res.stdout or "Antigravity Status" in res.stdout
