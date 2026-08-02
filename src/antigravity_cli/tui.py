@@ -1,12 +1,14 @@
 import sys
 import json
 import asyncio
+import subprocess
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
+from rich.table import Table
 from rich.layout import Layout
 from rich.live import Live
 
@@ -19,14 +21,15 @@ from antigravity_cli.skills.manager import SkillManager
 from antigravity_cli.session_validator import SessionValidator
 from antigravity_cli.providers.base import ChatMessage, ModelInfo
 from antigravity_cli.platform import PlatformEnvironment
+from antigravity_cli.workspace import WorkspaceManager, WorkspaceInfo
+from antigravity_cli.permissions import PermissionManager, PermissionRequest
 
 
 class AntigravityTUI:
     """
-    Terminal User Interface using Rich for Antigravity CLI.
-    Runs cleanly on both Ubuntu workstations and Termux constrained terminals.
-    Supports interactive key-based model selection, persistent conversation history,
-    and quota/limit metrics.
+    Production Terminal User Interface using Rich for Antigravity CLI.
+    Supports top banner workspace awareness, bottom status metrics,
+    interactive slash command palette, model picker, and permission-gated shell execution.
     """
 
     def __init__(self, config_manager: ConfigManager, vault_manager: VaultManager):
@@ -39,6 +42,7 @@ class AntigravityTUI:
             model_registry=self.registry
         )
         self.skills_manager = SkillManager(user_skills_dir=self.config.config.get_skills_dir())
+        self.permission_manager = PermissionManager(mode="ask")
         self.console = Console()
         self.history: List[ChatMessage] = self.load_history()
 
@@ -73,14 +77,30 @@ class AntigravityTUI:
                 pass
 
     def render_header(self) -> None:
+        ws: WorkspaceInfo = WorkspaceManager.get_workspace_info()
         platform_info = PlatformEnvironment.get_platform_name()
+        cfg = self.config.config
+        meta = self.vault.get_session_metadata(cfg.active_provider)
+
+        git_str = f"git:({ws.git_branch})" if ws.is_git_repo and ws.git_branch else "no-git"
+        mod_str = f" | +{ws.modified_files_count} modified" if ws.modified_files_count > 0 else ""
+        account_str = meta.account_label if meta else "guest"
+
         title = f"[bold cyan]Antigravity CLI[/bold cyan] [dim]v{__version__}[/dim] — [yellow]{platform_info}[/yellow]"
-        sub = "[dim]Type prompts directly or use slash commands (/models, /model, /users, /context, /deepthink, /session, /skills, /clear)[/dim]"
-        panel = Panel(Text.from_markup(f"{title}\n{sub}"), border_style="cyan")
+        meta_info = (
+            f"[bold yellow]Account:[/bold yellow] {account_str} | "
+            f"[bold yellow]Provider:[/bold yellow] {cfg.active_provider.upper()} | "
+            f"[bold yellow]Model:[/bold yellow] {cfg.active_model} | "
+            f"[bold yellow]Workspace:[/bold yellow] [cyan]{ws.workspace_name}[/cyan] ({git_str}{mod_str})"
+        )
+        sub = "[dim]Type prompts directly, run shell commands (!cmd), or use slash commands (/help, /models, /deepthink, /session, /skills, /clear)[/dim]"
+        
+        panel = Panel(Text.from_markup(f"{title}\n{meta_info}\n{sub}"), border_style="cyan")
         self.console.print(panel)
 
     async def render_status_bar(self) -> str:
         cfg = self.config.config
+        ws: WorkspaceInfo = WorkspaceManager.get_workspace_info()
         meta = self.vault.get_session_metadata(cfg.active_provider)
         health_str = meta.validation_status if meta else "UNAUTHENTICATED"
         
@@ -96,6 +116,7 @@ class AntigravityTUI:
             f"[bold yellow]DeepThink:[/bold yellow] [{think_color}]{'ON' if cfg.deep_think else 'OFF'}[/{think_color}] | "
             f"[bold yellow]Context:[/bold yellow] [white]{ctx.used_context:,}/{ctx.max_context:,}[/white] | "
             f"[bold yellow]Quota:[/bold yellow] [white]{quota.status}[/white] | "
+            f"[bold yellow]Perms:[/bold yellow] [white]{self.permission_manager.mode.upper()}[/white] | "
             f"[bold yellow]Health:[/bold yellow] [{health_color}]{health_str}[/{health_color}]"
         )
         return bar
@@ -105,12 +126,60 @@ class AntigravityTUI:
         panel = Panel(Text.from_markup(bar_text), border_style="blue", padding=(0, 1))
         self.console.print(panel)
 
+    async def show_command_palette(self, search_query: str = "") -> None:
+        """
+        Searchable interactive slash command palette.
+        Displays categorized commands with shortcut indices and descriptions.
+        """
+        self.console.print("\n[bold cyan]=== Antigravity Slash Command Palette ===[/bold cyan]")
+        commands = [
+            ("1", "models", "Open keyboard-navigable model & provider picker"),
+            ("2", "users", "View sessions, account health, and quota limits"),
+            ("3", "context", "View context window usage & remaining token budget"),
+            ("4", "deepthink", "Toggle multi-step reasoning policy wrap [on/off]"),
+            ("5", "skills", "Browse installed built-in and custom skills"),
+            ("6", "session validate", "Validate active session cookies"),
+            ("7", "session import <prov>", "Import session cookies (Header or JSON)"),
+            ("8", "status", "View system framework status & vault paths"),
+            ("9", "clear", "Clear conversation context history"),
+            ("0", "help", "Display command palette documentation"),
+        ]
+
+        table = Table(show_header=True, header_style="bold yellow", border_style="dim")
+        table.add_column("Key", style="bold cyan", width=4)
+        table.add_column("Command", style="bold white", width=22)
+        table.add_column("Description", style="dim")
+
+        for key, cmd, desc in commands:
+            if search_query and search_query not in cmd and search_query not in desc:
+                continue
+            table.add_row(f"[{key}]", f"/{cmd}", desc)
+
+        self.console.print(table)
+        
+        try:
+            choice = await asyncio.to_thread(lambda: input("\nSelect Command Key [0-9] or press Enter to cancel > "))
+            choice = choice.strip()
+        except (EOFError, KeyboardInterrupt):
+            return
+
+        cmd_map = {
+            "1": "/models",
+            "2": "/users",
+            "3": "/context",
+            "4": "/deepthink",
+            "5": "/skills",
+            "6": "/session validate",
+            "7": "/session import chatgpt",
+            "8": "/status",
+            "9": "/clear",
+            "0": "/help"
+        }
+
+        if choice in cmd_map:
+            await self.process_input(cmd_map[choice])
+
     async def show_interactive_model_picker(self) -> None:
-        """
-        Interactive number & menu based model picker.
-        Displays available models with context limits, quota status, and active indicator.
-        Allows instant single-character/number selection without typing full names.
-        """
         prov = self.config.config.active_provider
         models: List[ModelInfo] = await self.registry.get_models_for_provider(prov)
         quota = await self.registry.get_quota_info(prov)
@@ -122,7 +191,6 @@ class AntigravityTUI:
             think_marker = " [magenta](DeepThink)[/magenta]" if m.supports_deep_think else ""
             self.console.print(f"  [bold yellow][{idx}][/bold yellow] [bold white]{m.id}[/bold white]{active_marker}{think_marker} - {m.description} [dim](Context: {m.context_window:,})[/dim]")
         
-        # Switch provider option
         other_prov = "gemini" if prov == "chatgpt" else "chatgpt"
         self.console.print(f"  [bold yellow][P][/bold yellow] [dim]Switch Active Provider to {other_prov.upper()}[/dim]")
         self.console.print("  [bold yellow][C][/bold yellow] [dim]Cancel[/dim]")
@@ -150,13 +218,57 @@ class AntigravityTUI:
         elif choice.upper() == "C" or not choice:
             self.console.print("[dim]Model selection cancelled.[/dim]")
         else:
-            # Check if typed model ID string directly
             is_valid = await self.registry.is_valid_model(prov, choice)
             if is_valid:
                 self.config.update(active_model=choice)
                 self.console.print(f"[bold green]✓ Switched active model to '{choice}'[/bold green]")
             else:
                 self.console.print(f"[red]Option '{choice}' not recognized.[/red]")
+
+    async def execute_shell_command(self, cmd_line: str) -> None:
+        """
+        Executes native shell development commands through permission gates.
+        """
+        req = PermissionRequest(
+            action_type="shell_execution",
+            target=cmd_line,
+            reason=f"Execute shell command '{cmd_line}'"
+        )
+        
+        granted = self.permission_manager.is_permission_granted(req)
+        if granted is None:
+            self.console.print(f"\n[bold yellow]=== Permission Requested ===[/bold yellow]")
+            self.console.print(f"Action: Shell Execution\nTarget: {cmd_line}")
+            self.console.print("[1] Allow Once | [2] Allow Session | [3] Deny")
+            try:
+                dec = await asyncio.to_thread(lambda: input("Choice [1/2/3] > "))
+                dec = dec.strip()
+            except (EOFError, KeyboardInterrupt):
+                dec = "3"
+            
+            if dec == "1":
+                granted = self.permission_manager.grant_permission(req, "allow_once")
+            elif dec == "2":
+                granted = self.permission_manager.grant_permission(req, "allow_session")
+            else:
+                granted = self.permission_manager.grant_permission(req, "deny")
+
+        if not granted:
+            self.console.print(f"[bold red]Permission Denied:[/bold red] Execution of '{cmd_line}' cancelled.")
+            return
+
+        self.console.print(f"[dim]Executing: {cmd_line}[/dim]")
+        try:
+            res = await asyncio.to_thread(
+                lambda: subprocess.run(cmd_line, shell=True, capture_output=True, text=True, timeout=30)
+            )
+            if res.stdout:
+                self.console.print(res.stdout)
+            if res.stderr:
+                self.console.print(f"[yellow]{res.stderr}[/yellow]")
+            self.console.print(f"[dim]Exit code: {res.returncode}[/dim]")
+        except Exception as e:
+            self.console.print(f"[bold red]Execution error:[/bold red] {e}")
 
     async def handle_session_import_interactive(self, provider: str) -> None:
         self.console.print(f"\n[bold yellow]=== Import Session Cookies for {provider.upper()} ===[/bold yellow]")
@@ -189,7 +301,6 @@ class AntigravityTUI:
         self.console.print(f"[bold green]✓ Session successfully imported and encrypted for {provider.upper()}![/bold green]")
         self.console.print(f"[dim]Format: {val_res.format_type} | Cookies parsed: {val_res.normalized_session['cookie_count']}[/dim]")
         
-        # Switch active provider to newly imported session & refresh registry adapters
         self.config.update(active_provider=provider)
         self.registry._reload_adapters()
 
@@ -202,9 +313,17 @@ class AntigravityTUI:
             self.console.print("[yellow]Exiting Antigravity CLI. Goodbye![/yellow]")
             return False
 
+        # Native shell command execution prefix (!)
+        if user_input.startswith("!"):
+            await self.execute_shell_command(user_input[1:].strip())
+            return True
+
         # Slash commands
         if user_input.startswith("/"):
-            if user_input in ("/models", "/model"):
+            if user_input == "/":
+                await self.show_command_palette()
+                return True
+            elif user_input in ("/models", "/model"):
                 await self.show_interactive_model_picker()
                 return True
             elif user_input in ("/clear", "/reset"):
@@ -226,7 +345,6 @@ class AntigravityTUI:
             prev_prov = self.config.config.active_provider
             res: CommandResult = await self.router.execute(user_input)
             
-            # Reset conversation history if provider changed
             if self.config.config.active_provider != prev_prov:
                 self.clear_history()
 
@@ -241,11 +359,11 @@ class AntigravityTUI:
         cfg = self.config.config
         adapter = self.registry.get_adapter(cfg.active_provider)
 
-        # Check authentication health
+        # Verify authentication state strictly
         health = await adapter.validate_session()
         if not health.is_authenticated:
-            self.console.print(f"[bold red]Error:[/bold red] Active provider {cfg.active_provider.upper()} is not authenticated.")
-            self.console.print(f"[yellow]Run `/session import {cfg.active_provider}` to provide your session cookies.[/yellow]")
+            self.console.print(f"[bold red]Error:[/bold red] Active provider {cfg.active_provider.upper()} is unauthenticated.")
+            self.console.print(f"[yellow]Run `/session import {cfg.active_provider}` to provide your valid session cookies.[/yellow]")
             return True
 
         self.history.append(ChatMessage(role="user", content=user_input))
@@ -264,10 +382,9 @@ class AntigravityTUI:
                 sys.stdout.flush()
                 response_text += chunk
         except Exception as e:
-            error_msg = f"\n[Streaming error: {e}]"
-            sys.stdout.write(error_msg)
-            sys.stdout.flush()
-            response_text += error_msg
+            error_msg = f"\n[bold red]Live Stream Error:[/bold red] {e}\n"
+            self.console.print(error_msg)
+            response_text += f"\n[Error: {e}]"
 
         sys.stdout.write("\n\n")
         self.history.append(ChatMessage(role="assistant", content=response_text))

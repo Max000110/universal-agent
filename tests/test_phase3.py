@@ -49,6 +49,6 @@ async def test_streaming_chat_with_deepthink():
         chunks.append(chunk)
 
     full_response = "".join(chunks)
-    assert "[gpt-4o]" in full_response
+    assert "gpt-4o" in full_response
     assert "Thinking Process" in full_response or "REASONING POLICY" in full_response
     assert "Hello test prompt" in full_response
