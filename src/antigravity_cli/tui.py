@@ -17,7 +17,7 @@ from antigravity_cli.registry import ModelRegistry
 from antigravity_cli.router import CommandRouter, CommandResult
 from antigravity_cli.skills.manager import SkillManager
 from antigravity_cli.session_validator import SessionValidator
-from antigravity_cli.providers.base import ChatMessage
+from antigravity_cli.providers.base import ChatMessage, ModelInfo
 from antigravity_cli.platform import PlatformEnvironment
 
 
@@ -25,7 +25,8 @@ class AntigravityTUI:
     """
     Terminal User Interface using Rich for Antigravity CLI.
     Runs cleanly on both Ubuntu workstations and Termux constrained terminals.
-    Supports persistent conversation context history across sessions.
+    Supports interactive key-based model selection, persistent conversation history,
+    and quota/limit metrics.
     """
 
     def __init__(self, config_manager: ConfigManager, vault_manager: VaultManager):
@@ -74,7 +75,7 @@ class AntigravityTUI:
     def render_header(self) -> None:
         platform_info = PlatformEnvironment.get_platform_name()
         title = f"[bold cyan]Antigravity CLI[/bold cyan] [dim]v{__version__}[/dim] — [yellow]{platform_info}[/yellow]"
-        sub = "[dim]Type prompts directly or use slash commands (/help, /models, /deepthink, /session, /skills, /clear)[/dim]"
+        sub = "[dim]Type prompts directly or use slash commands (/models, /model, /users, /context, /deepthink, /session, /skills, /clear)[/dim]"
         panel = Panel(Text.from_markup(f"{title}\n{sub}"), border_style="cyan")
         self.console.print(panel)
 
@@ -103,6 +104,59 @@ class AntigravityTUI:
         bar_text = await self.render_status_bar()
         panel = Panel(Text.from_markup(bar_text), border_style="blue", padding=(0, 1))
         self.console.print(panel)
+
+    async def show_interactive_model_picker(self) -> None:
+        """
+        Interactive number & menu based model picker.
+        Displays available models with context limits, quota status, and active indicator.
+        Allows instant single-character/number selection without typing full names.
+        """
+        prov = self.config.config.active_provider
+        models: List[ModelInfo] = await self.registry.get_models_for_provider(prov)
+        quota = await self.registry.get_quota_info(prov)
+        active_model = self.config.config.active_model
+
+        self.console.print(f"\n[bold cyan]=== Select Model for {prov.upper()} (Quota: {quota.status} | Remaining: {quota.remaining}) ===[/bold cyan]")
+        for idx, m in enumerate(models, 1):
+            active_marker = " [bold green][ACTIVE][/bold green]" if m.id == active_model else ""
+            think_marker = " [magenta](DeepThink)[/magenta]" if m.supports_deep_think else ""
+            self.console.print(f"  [bold yellow][{idx}][/bold yellow] [bold white]{m.id}[/bold white]{active_marker}{think_marker} - {m.description} [dim](Context: {m.context_window:,})[/dim]")
+        
+        # Switch provider option
+        other_prov = "gemini" if prov == "chatgpt" else "chatgpt"
+        self.console.print(f"  [bold yellow][P][/bold yellow] [dim]Switch Active Provider to {other_prov.upper()}[/dim]")
+        self.console.print("  [bold yellow][C][/bold yellow] [dim]Cancel[/dim]")
+
+        try:
+            choice = await asyncio.to_thread(lambda: input("\nSelect Option [1-4 / P / C] > "))
+            choice = choice.strip()
+        except (EOFError, KeyboardInterrupt):
+            self.console.print("[dim]Model selection cancelled.[/dim]")
+            return
+
+        if choice.upper() == "P":
+            default_model = "gpt-4o" if other_prov == "chatgpt" else "gemini-1.5-pro"
+            self.config.update(active_provider=other_prov, active_model=default_model)
+            self.clear_history()
+            self.console.print(f"[bold green]✓ Switched provider to {other_prov.upper()} (Active model: {default_model})[/bold green]")
+        elif choice.isdigit():
+            num = int(choice)
+            if 1 <= num <= len(models):
+                selected = models[num - 1]
+                self.config.update(active_model=selected.id)
+                self.console.print(f"[bold green]✓ Switched active model to '{selected.id}' ({selected.name})[/bold green]")
+            else:
+                self.console.print("[red]Invalid selection number.[/red]")
+        elif choice.upper() == "C" or not choice:
+            self.console.print("[dim]Model selection cancelled.[/dim]")
+        else:
+            # Check if typed model ID string directly
+            is_valid = await self.registry.is_valid_model(prov, choice)
+            if is_valid:
+                self.config.update(active_model=choice)
+                self.console.print(f"[bold green]✓ Switched active model to '{choice}'[/bold green]")
+            else:
+                self.console.print(f"[red]Option '{choice}' not recognized.[/red]")
 
     async def handle_session_import_interactive(self, provider: str) -> None:
         self.console.print(f"\n[bold yellow]=== Import Session Cookies for {provider.upper()} ===[/bold yellow]")
@@ -150,7 +204,10 @@ class AntigravityTUI:
 
         # Slash commands
         if user_input.startswith("/"):
-            if user_input in ("/clear", "/reset"):
+            if user_input in ("/models", "/model"):
+                await self.show_interactive_model_picker()
+                return True
+            elif user_input in ("/clear", "/reset"):
                 self.clear_history()
                 self.console.print(Panel("Conversation context history cleared.", border_style="yellow", title="Command: clear"))
                 return True

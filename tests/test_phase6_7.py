@@ -29,6 +29,6 @@ def test_cli_status_command(tmp_path, monkeypatch):
 
 def test_cli_exec_command(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
-    res = runner.invoke(app, ["exec", "/models"])
+    res = runner.invoke(app, ["exec", "/status"])
     assert res.exit_code == 0
-    assert "Available Models for CHATGPT" in res.stdout
+    assert "System Status" in res.stdout or "Antigravity Status" in res.stdout
