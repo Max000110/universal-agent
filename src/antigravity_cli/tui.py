@@ -1,5 +1,7 @@
 import sys
+import json
 import asyncio
+from pathlib import Path
 from typing import Optional, List
 
 from rich.console import Console
@@ -23,6 +25,7 @@ class AntigravityTUI:
     """
     Terminal User Interface using Rich for Antigravity CLI.
     Runs cleanly on both Ubuntu workstations and Termux constrained terminals.
+    Supports persistent conversation context history across sessions.
     """
 
     def __init__(self, config_manager: ConfigManager, vault_manager: VaultManager):
@@ -36,12 +39,42 @@ class AntigravityTUI:
         )
         self.skills_manager = SkillManager(user_skills_dir=self.config.config.get_skills_dir())
         self.console = Console()
-        self.history: List[ChatMessage] = []
+        self.history: List[ChatMessage] = self.load_history()
+
+    def load_history(self) -> List[ChatMessage]:
+        p = Path(self.config.config.app_dir) / "history.json"
+        if p.exists():
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                return [ChatMessage(**item) for item in data]
+            except Exception:
+                return []
+        return []
+
+    def save_history(self) -> None:
+        p = Path(self.config.config.app_dir) / "history.json"
+        try:
+            max_h = self.config.config.max_history
+            recent = self.history[-max_h:] if len(self.history) > max_h else self.history
+            with open(p, "w", encoding="utf-8") as f:
+                json.dump([m.model_dump() for m in recent], f, indent=2)
+        except Exception:
+            pass
+
+    def clear_history(self) -> None:
+        self.history.clear()
+        p = Path(self.config.config.app_dir) / "history.json"
+        if p.exists():
+            try:
+                p.unlink()
+            except Exception:
+                pass
 
     def render_header(self) -> None:
         platform_info = PlatformEnvironment.get_platform_name()
         title = f"[bold cyan]Antigravity CLI[/bold cyan] [dim]v{__version__}[/dim] — [yellow]{platform_info}[/yellow]"
-        sub = "[dim]Type prompts directly or use slash commands (/help, /models, /deepthink, /session, /skills)[/dim]"
+        sub = "[dim]Type prompts directly or use slash commands (/help, /models, /deepthink, /session, /skills, /clear)[/dim]"
         panel = Panel(Text.from_markup(f"{title}\n{sub}"), border_style="cyan")
         self.console.print(panel)
 
@@ -117,7 +150,11 @@ class AntigravityTUI:
 
         # Slash commands
         if user_input.startswith("/"):
-            if user_input == "/skills" or user_input.startswith("/skills "):
+            if user_input in ("/clear", "/reset"):
+                self.clear_history()
+                self.console.print(Panel("Conversation context history cleared.", border_style="yellow", title="Command: clear"))
+                return True
+            elif user_input == "/skills" or user_input.startswith("/skills "):
                 skills = self.skills_manager.list_skills()
                 self.console.print("\n[bold cyan]=== Installed Antigravity Skills ===[/bold cyan]")
                 for s in skills:
@@ -134,7 +171,7 @@ class AntigravityTUI:
             
             # Reset conversation history if provider changed
             if self.config.config.active_provider != prev_prov:
-                self.history.clear()
+                self.clear_history()
 
             if res.data and res.data.get("action") == "import_prompt":
                 await self.handle_session_import_interactive(res.data.get("provider", "chatgpt"))
@@ -177,6 +214,7 @@ class AntigravityTUI:
 
         sys.stdout.write("\n\n")
         self.history.append(ChatMessage(role="assistant", content=response_text))
+        self.save_history()
         return True
 
     async def run_loop(self) -> None:
